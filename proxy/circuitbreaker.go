@@ -14,6 +14,22 @@ type CircuitBreaker struct {
 	mu 					sync.Mutex // Thread safety
 }
 
+// GetState is a helper function to return the 
+// current state of a CircuitBreaker
+func (cb *CircuitBreaker) GetState() string {
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
+	return cb.state
+}
+
+// GetFailureCount is a helper function to return the 
+// current number of failures of a CircuitBreaker
+func (cb *CircuitBreaker) GetFailureCount() int {
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
+	return cb.failureCount
+}
+
 // isOpen tells the proxy whether or not an upstream
 // server is in an 'open' state or not. 
 // It also checks if enough time has passed to transition
@@ -28,10 +44,8 @@ func (cb *CircuitBreaker) IsOpen() bool {
 		if time.Since(cb.lastFailTime) >= cb.timeout {
 			// Transition to half-open to test recovery
 			cb.state = "half-open"
-			return false //
-		} else {
-			return true
-		}
+		} 
+		return cb.state == "open" // Returns true if still open, false if transitioned
 	}
 	return false 
 }
@@ -39,7 +53,10 @@ func (cb *CircuitBreaker) IsOpen() bool {
 // RecordFailure is called when a request to an upstream 
 // server fails. The failure is recorded in the upstream's
 // CircuitBreaker and the state is updated if necessary. 
-func (cb *CircuitBreaker) RecordFailure() bool {
+func (cb *CircuitBreaker) RecordFailure() {
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
+
 	// Increment failure counter
 	cb.failureCount++
 
@@ -49,16 +66,16 @@ func (cb *CircuitBreaker) RecordFailure() bool {
 	// Check if we've gone over failure threshold
 	if cb.failureCount == cb.failureThreshold {
 		cb.state = "open"
-		return true
 	} 
-
-	return true
 }
 
 // RecordSuccess is called when a request to an upstream 
 // server succeeds. The sucess is recorded in the upstream's
 // CircuitBreaker and the state is updated if necessary.
-func (cb *CircuitBreaker) RecordSuccess() bool {
+func (cb *CircuitBreaker) RecordSuccess() {
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
+
 	// If we've got a success while in 'half-open'
 	// we change state to 'closed'
 	if cb.state == "half-open" {
@@ -67,5 +84,4 @@ func (cb *CircuitBreaker) RecordSuccess() bool {
 
 	// Set failure counter back to 0
 	cb.failureCount = 0
-	return true
 }

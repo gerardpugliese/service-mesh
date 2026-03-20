@@ -49,6 +49,10 @@ func (lb *LoadBalancer) handleRequest(w http.ResponseWriter, r *http.Request) {
 	// Get CircuitBreaker for this upstream
 	cb := lb.breakers[selectedUpstream]
 
+	state = cb.GetState()
+	failures = cb.GetFailureCount()
+	fmt.Printf("Circuit state: %s (failures: %d)\n", state, failures)
+
 	// If upstream is open, return error
 	if cb.IsOpen() {
 		fmt.Println("Upstream is unavailable.")
