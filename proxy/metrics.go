@@ -36,6 +36,16 @@ var (
 		},
 		[]string{"upstream"},
 	)
+
+	// Total timeouts counter
+	// Tracks total number of timeouts by upstream
+	requestTimeouts = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "proxy_request_timeouts_total",
+			Help: "Total request timeouts by upstream",
+		},
+		[]string{"upstream"},
+	)
 )
 
 // init() runs automatically on startup and registers all metrics
@@ -43,6 +53,7 @@ func init() {
 	prometheus.MustRegister(requestsTotal)
 	prometheus.MustRegister(requestLatency)
 	prometheus.MustRegister(circuitBreakerState)
+	prometheus.MustRegister(requestTimeouts)
 }
 
 // RecordRequest records a successful request to metrics
@@ -73,4 +84,9 @@ func UpdateCircuitBreakerState(upstream string, state string) {
 	}
 
 	circuitBreakerState.WithLabelValues(upstream).Set(stateValue)
+}
+
+// RecordTimeout records a request timeout to metrics
+func RecordTimeout(upstream string) {
+	requestTimeouts.WithLabelValues(upstream).Inc()
 }

@@ -7,6 +7,8 @@ import (
 	"sync"
 	"time"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"context"
+	"errors"
 )
 
 /*  
@@ -25,6 +27,7 @@ type LoadBalancer struct {
 	breakers map[string]*CircuitBreaker
 	counter int
 	mu sync.Mutex
+	requestTimeout time.Duration // How long to wait for the upstream
 }
 
 // Load Balancer method for selecting an upstream server to send a request to
@@ -49,6 +52,11 @@ func (lb *LoadBalancer) handleRequest(w http.ResponseWriter, r *http.Request) {
 	// Selecting upstream to forward to
 	selectedUpstream := lb.SelectUpstream()
 	fmt.Printf("Forwarding to: %s\n", selectedUpstream)
+
+	// Create a Context with a 5-second timeout
+	ctx, cancel := context.WithTimeout(context.Background(), lb.requestTimeout)
+	defer cancel()
+	
 	
 	// Get CircuitBreaker for this upstream
 	cb := lb.breakers[selectedUpstream]
@@ -77,7 +85,7 @@ func (lb *LoadBalancer) handleRequest(w http.ResponseWriter, r *http.Request) {
 	upstreamURL := selectedUpstream + r.RequestURI
 
 	// Create request for Upstream
-	req, err := http.NewRequest(r.Method, upstreamURL, r.Body)
+	req, err := http.NewRequestWithContext(ctx, r.Method, upstreamURL, r.Body)
 	if err != nil {
 		fmt.Println("Error creating request: ", err, "\n")
 	
@@ -99,6 +107,20 @@ func (lb *LoadBalancer) handleRequest(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		// Record error in CircuitBreaker
 		cb.RecordFailure()
+
+		//Check if it's a timeout
+		if errors.Is(err, context.DeadlineExceeded) {
+			fmt.Printf("Timeout calling upstream: %v\n", err)
+			latency := time.Since(start).Milliseconds()
+			RecordTimeout(selectedUpstream)
+			RecordError(selectedUpstream, latency)
+			UpdateCircuitBreakerState(selectedUpstream, cb.GetState())
+
+			w.WriteHeader(http.StatusGatewayTimeout)
+			w.Write([]byte("Upstream request timeout"))
+			return
+		}
+
 		fmt.Printf("Error calling upstream: %v\n", err)
 
 		// Record error metric
@@ -167,6 +189,7 @@ func main() {
 				},
 		},
 		counter: 0,
+		requestTimeout: 	5 * time.Second,
 	}
 
 	// Add metrics endpoint
