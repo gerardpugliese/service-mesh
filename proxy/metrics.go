@@ -9,10 +9,10 @@ var (
 	// Tracks total number of requests by upstream and status (success/error)
 	requestsTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "proxy_requests_total"
-			Help: "Total HTTP requests processed by the proxy"
+			Name: "proxy_requests_total",
+			Help: "Total HTTP requests processed by the proxy",
 		},
-		[]string{"upstream", "status"}
+		[]string{"upstream", "status"},
 	)
 
 	// Request latency histogram
@@ -21,9 +21,9 @@ var (
 		prometheus.HistogramOpts{
 			Name: "proxy_request_latency_ms",
 			Help: "Request latency in milliseconds",
-			Buckets: []float64{10, 50, 100, 500, 1000, 5000}
+			Buckets: []float64{10, 50, 100, 500, 1000, 5000},
 		},
-		[]string{"upstream"}
+		[]string{"upstream"},
 	)
 
 	// Circuit breaker state gauge
@@ -32,7 +32,7 @@ var (
 	circuitBreakerState = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "proxy_circuit_breaker_state",
-			Help: "Circuit breaker state per upstream (0=closed, 1=open, 2=half-open)"
+			Help: "Circuit breaker state per upstream (0=closed, 1=open, 2=half-open)",
 		},
 		[]string{"upstream"},
 	)

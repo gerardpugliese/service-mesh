@@ -6,6 +6,7 @@ import (
 	"io"
 	"sync"
 	"time"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 /*  
@@ -42,6 +43,9 @@ func (lb *LoadBalancer) handleRequest(w http.ResponseWriter, r *http.Request) {
 	// Deserialize request
 	fmt.Printf("Proxy got: %s %s\n", r.Method, r.URL.Path)
 
+	// Start timer for latency measurement
+	start := time.Now()
+
 	// Selecting upstream to forward to
 	selectedUpstream := lb.SelectUpstream()
 	fmt.Printf("Forwarding to: %s\n", selectedUpstream)
@@ -49,13 +53,21 @@ func (lb *LoadBalancer) handleRequest(w http.ResponseWriter, r *http.Request) {
 	// Get CircuitBreaker for this upstream
 	cb := lb.breakers[selectedUpstream]
 
-	state = cb.GetState()
-	failures = cb.GetFailureCount()
+	state := cb.GetState()
+	failures := cb.GetFailureCount()
 	fmt.Printf("Circuit state: %s (failures: %d)\n", state, failures)
 
 	// If upstream is open, return error
 	if cb.IsOpen() {
 		fmt.Println("Upstream is unavailable.")
+
+		// Record error metric
+		latency := time.Since(start).Milliseconds()
+		RecordError(selectedUpstream, latency)
+
+		// Update circuit breaker state metric
+		UpdateCircuitBreakerState(selectedUpstream, cb.GetState())
+
 		w.WriteHeader(http.StatusServiceUnavailable)
 		w.Write([]byte("Upstream service unavailable: " + selectedUpstream))
 		return
@@ -68,6 +80,11 @@ func (lb *LoadBalancer) handleRequest(w http.ResponseWriter, r *http.Request) {
 	req, err := http.NewRequest(r.Method, upstreamURL, r.Body)
 	if err != nil {
 		fmt.Println("Error creating request: ", err, "\n")
+	
+		// Record error metric
+		latency := time.Since(start).Milliseconds()
+		RecordError(selectedUpstream, latency)
+
 		return
 	}
 
@@ -83,6 +100,14 @@ func (lb *LoadBalancer) handleRequest(w http.ResponseWriter, r *http.Request) {
 		// Record error in CircuitBreaker
 		cb.RecordFailure()
 		fmt.Printf("Error calling upstream: %v\n", err)
+
+		// Record error metric
+		latency := time.Since(start).Milliseconds()
+		RecordError(selectedUpstream, latency)
+
+		// Update circuit breaker state metric
+		UpdateCircuitBreakerState(selectedUpstream, cb.GetState())
+
 		w.WriteHeader(http.StatusBadGateway)
 		w.Write([]byte("Upstream service unavailable"))
 		return
@@ -90,6 +115,13 @@ func (lb *LoadBalancer) handleRequest(w http.ResponseWriter, r *http.Request) {
 
 	// Record success in CircuitBreaker
 	cb.RecordSuccess()
+
+	// Record success metric
+	latency := time.Since(start).Milliseconds()
+	RecordRequest(selectedUpstream, latency)
+
+	// Update circuit breaker state metric
+	UpdateCircuitBreakerState(selectedUpstream, cb.GetState())
 	
 	// Copy the response headers from upstream back to the client
 	for key, values := range resp.Header {
@@ -136,6 +168,9 @@ func main() {
 		},
 		counter: 0,
 	}
+
+	// Add metrics endpoint
+	http.Handle("/metrics", promhttp.Handler())
 
 	// Assign HTTP function to '/' path
 	http.HandleFunc("/", lb.handleRequest)
