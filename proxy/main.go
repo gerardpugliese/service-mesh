@@ -167,12 +167,12 @@ func main() {
 	// Create Load Balancer
 	lb := &LoadBalancer{
 		upstreams: []string{
-			"http://localhost:3000",
+			"http://localhost:3003",
 			"http://localhost:3001",
 			"http://localhost:3002",
 		},
 		breakers: map[string]*CircuitBreaker{
-			"http://localhost:3000": &CircuitBreaker{
+			"http://localhost:3003": &CircuitBreaker{
 					failureThreshold:  	3,
 					timeout: 			5 * time.Second,
 					state: 				"closed",

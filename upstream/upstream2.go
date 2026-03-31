@@ -2,8 +2,7 @@ package main
 
 import (
 	"fmt"
-	"net/http"
-	"time"
+	"net/http" 
 )
 
 /*  
@@ -20,7 +19,6 @@ import (
 func handleRequest (w http.ResponseWriter, r *http.Request) {
 	// Deserialize request
 	fmt.Printf("Upstream #2 got: %s %s\n", r.Method, r.RequestURI)
-	time.Sleep(10 * time.Second)
 	w.Write([]byte("Response from upstream 2\n"))
 }
 

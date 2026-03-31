@@ -19,7 +19,6 @@ import (
 func handleRequest (w http.ResponseWriter, r *http.Request) {
 	// Deserialize request
 	fmt.Printf("Upstream #1 got: %s %s\n", r.Method, r.RequestURI)
-
 	w.Write([]byte("Response from upstream 1\n"))
 }
 
@@ -29,6 +28,6 @@ func main() {
 	http.HandleFunc("/", handleRequest)
 
 	// Set up listener on port 3000
-	fmt.Printf("Upstream service listening on :3000\n")
-	http.ListenAndServe(":3000", nil)
+	fmt.Printf("Upstream service listening on :3003\n")
+	http.ListenAndServe(":3003", nil)
 }
