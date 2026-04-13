@@ -160,6 +160,10 @@ func (lb *LoadBalancer) handleRequest(w http.ResponseWriter, r *http.Request) {
 		// Update circuit breaker state metric
 		UpdateCircuitBreakerState(selectedUpstream, cb.GetState())
 
+		// Broadcast to dashboard
+		circuitOpen := cb.IsOpen()
+		BroadcastRequest(selectedUpstream, r.Method, r.URL.Path, "error", latency, circuitOpen)
+
 		w.WriteHeader(http.StatusBadGateway)
 		w.Write([]byte("Upstream service unavailable"))
 		return
@@ -174,6 +178,9 @@ func (lb *LoadBalancer) handleRequest(w http.ResponseWriter, r *http.Request) {
 
 	// Update circuit breaker state metric
 	UpdateCircuitBreakerState(selectedUpstream, cb.GetState())
+
+	// Broadcast to dashboard
+	BroadcastRequest(selectedUpstream, r.Method, r.URL.Path, "success", latency, false)
 	
 	// Copy the response headers from upstream back to the client
 	for key, values := range resp.Header {
@@ -221,6 +228,9 @@ func main() {
 		counter: 0,
 		requestTimeout: 	5 * time.Second,
 	}
+
+	// Register WebSocket endpoint
+	http.HandleFunc("/ws", handleWebSocket)
 
 	// Add metrics endpoint
 	http.Handle("/metrics", promhttp.Handler())

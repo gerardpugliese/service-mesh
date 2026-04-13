@@ -1,0 +1,5 @@
+# Certificates and keys (NEVER commit private keys!)
+certs/*.pem
+certs/*.csr
+certs/*.srl
+certs/*.cnf

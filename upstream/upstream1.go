@@ -3,6 +3,9 @@ package main
 import (
 	"fmt"
 	"net/http"
+	"crypto/tls"
+	"crypto/x509"
+	"io/ioutil"
 )
 
 /*  
@@ -29,5 +32,38 @@ func main() {
 
 	// Set up listener on port 3000
 	fmt.Printf("Upstream service listening on :3003\n")
-	http.ListenAndServe(":3003", nil)
+
+	// Load certificate and key
+	cert, err := tls.LoadX509KeyPair("../certs/server-cert.pem", "../certs/server-key.pem")
+	if err != nil {
+		panic(err)
+	}
+
+	// Load CA certificate
+	caCert, err := ioutil.ReadFile("../certs/ca-cert.pem")
+	if err != nil {
+		panic(err)
+	}
+
+	caCertPool := x509.NewCertPool()
+	if !caCertPool.AppendCertsFromPEM(caCert) {
+        panic("failed to parse CA certificate")
+    }
+
+	// Create TLS config
+	tlsConfig := &tls.Config{
+		Certificates: []tls.Certificate{cert},
+		ClientAuth: tls.RequireAndVerifyClientCert,  // Require client certs
+   	 	ClientCAs: caCertPool,  // Trust certs signed by this CA
+	}
+
+	// Create TLS listener
+	listener, err := tls.Listen("tcp", ":3003", tlsConfig)
+	if err != nil {
+		panic(err)
+	}
+
+	// Serve HTTPS
+	server := &http.Server{Handler: http.DefaultServeMux}
+	server.Serve(listener)
 }
