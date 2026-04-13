@@ -4,11 +4,14 @@ import (
 	"fmt"
 	"net/http"
 	"io"
+	"io/ioutil"
 	"sync"
 	"time"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"context"
 	"errors"
+	"crypto/tls"
+	"crypto/x509"
 )
 
 /*  
@@ -96,11 +99,38 @@ func (lb *LoadBalancer) handleRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	/* TLS CONFIGURATION */
+
+	// Load client certificate and key
+	clientCert, err := tls.LoadX509KeyPair("../certs/client-cert.pem", "../certs/client-key.pem")
+	if err != nil {
+		panic(err)
+	}
+
+	// Load CA certificate
+	caCert, err := ioutil.ReadFile("../certs/ca-cert.pem")
+	if err != nil {
+		panic(err)
+	}
+
+	caCertPool := x509.NewCertPool()
+	caCertPool.AppendCertsFromPEM(caCert)
+
+	// Create TLS config
+	tlsConfig := &tls.Config{
+			Certificates: []tls.Certificate{clientCert},
+			RootCAs: caCertPool,
+		}
+
 	// Copy headers from client request to upstream request
 	req.Header = r.Header
 
 	// Create an HTTP client
-	client := &http.Client {}
+	client := &http.Client {
+		Transport: &http.Transport{
+			TLSClientConfig: tlsConfig,
+		},
+	}
 
 	// Execute request
 	resp, err := client.Do(req)
@@ -167,22 +197,22 @@ func main() {
 	// Create Load Balancer
 	lb := &LoadBalancer{
 		upstreams: []string{
-			"http://localhost:3003",
-			"http://localhost:3001",
-			"http://localhost:3002",
+			"https://localhost:3003",
+			"https://localhost:3001",
+			"https://localhost:3002",
 		},
 		breakers: map[string]*CircuitBreaker{
-			"http://localhost:3003": &CircuitBreaker{
+			"https://localhost:3003": &CircuitBreaker{
 					failureThreshold:  	3,
 					timeout: 			5 * time.Second,
 					state: 				"closed",
 				},
-			"http://localhost:3001": &CircuitBreaker{
+			"https://localhost:3001": &CircuitBreaker{
 					failureThreshold:  	3,
 					timeout: 			5 * time.Second,
 					state: 				"closed",
 				},
-			"http://localhost:3002": &CircuitBreaker{
+			"https://localhost:3002": &CircuitBreaker{
 					failureThreshold:  	3,
 					timeout: 			5 * time.Second,
 					state: 				"closed",
